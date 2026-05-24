@@ -11,13 +11,13 @@ return new class extends Migration
         if (! Schema::hasTable('patients')) {
             Schema::create('patients', function (Blueprint $table) {
                 $table->id('patient_id');
-                $table->string('first_name', 100);
-                $table->string('last_name', 100);
-                $table->string('address');
-                $table->string('phone', 30)->nullable();
+                $table->string('first_name', 50);
+                $table->string('last_name', 50);
+                $table->text('address');
+                $table->string('phone', 20)->nullable();
                 $table->date('date_of_birth');
-                $table->char('sex', 1);
-                $table->string('marital_status', 30)->nullable();
+                $table->string('sex', 10);
+                $table->string('marital_status', 20)->nullable();
                 $table->date('date_registered');
             });
         }
@@ -26,20 +26,20 @@ return new class extends Migration
             Schema::create('next_of_kin', function (Blueprint $table) {
                 $table->id('kin_id');
                 $table->foreignId('patient_id')->constrained('patients', 'patient_id')->cascadeOnDelete();
-                $table->string('full_name');
-                $table->string('relationship', 80);
-                $table->string('address');
-                $table->string('phone', 30)->nullable();
+                $table->string('full_name', 100);
+                $table->string('relationship', 50);
+                $table->text('address');
+                $table->string('phone', 20)->nullable();
             });
         }
 
         if (! Schema::hasTable('local_doctors')) {
             Schema::create('local_doctors', function (Blueprint $table) {
                 $table->id('doctor_id');
-                $table->string('full_name');
-                $table->string('clinic_number')->unique();
-                $table->string('address');
-                $table->string('phone', 30)->nullable();
+                $table->string('full_name', 100);
+                $table->string('clinic_number', 50)->unique();
+                $table->text('address');
+                $table->string('phone', 20)->nullable();
             });
         }
 
@@ -60,7 +60,7 @@ return new class extends Migration
                 $table->string('address');
                 $table->string('phone', 30)->nullable();
                 $table->date('date_of_birth');
-                $table->char('sex', 1);
+                $table->string('sex', 10);
                 $table->string('nin', 30)->unique();
                 $table->string('staff_position', 100);
                 $table->decimal('salary', 10, 2);

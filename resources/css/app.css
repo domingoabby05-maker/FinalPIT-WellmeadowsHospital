@@ -24,6 +24,7 @@ body.hospital-shell {
 
 button,
 input,
+textarea,
 select {
     font: inherit;
 }
@@ -113,9 +114,11 @@ a {
 }
 
 .signin-panel input,
+.signin-panel select,
 .toolbar input,
 .toolbar select,
 .modal-form input,
+.modal-form textarea,
 .modal-form select {
     width: 100%;
     min-height: 42px;
@@ -126,11 +129,70 @@ a {
     color: #152033;
 }
 
+.modal-form textarea {
+    min-height: 88px;
+    padding-top: 10px;
+    resize: vertical;
+}
+
 .form-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     font-size: 14px;
+}
+
+.auth-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+.auth-tabs button,
+.link-button,
+.link {
+    border: 0;
+    background: transparent;
+    color: #1769f6;
+    font-weight: 800;
+}
+
+.link {
+    width: fit-content;
+    min-height: auto;
+    padding: 0;
+    justify-self: start;
+}
+
+.hidden {
+    display: none;
+}
+
+.auth-tabs button {
+    min-height: 38px;
+    border: 1px solid #dfe5ef;
+    border-radius: 6px;
+    color: #263247;
+}
+
+.auth-tabs button.active {
+    background: #eaf2ff;
+    border-color: #b9d3ff;
+    color: #1769f6;
+}
+
+.auth-form {
+    display: none;
+    gap: 16px;
+}
+
+.auth-form.active {
+    display: grid;
+}
+
+.create-account {
+    padding-top: 14px;
+    border-top: 1px solid #eef2f7;
 }
 
 .check {
@@ -146,7 +208,8 @@ a {
 }
 
 .primary,
-.ghost {
+.ghost,
+.danger {
     min-height: 42px;
     border: 0;
     border-radius: 6px;
@@ -166,6 +229,13 @@ a {
     color: #263247;
 }
 
+.danger {
+    padding: 0 18px;
+    background: #fff0f2;
+    border: 1px solid #ffc7d0;
+    color: #c8193b;
+}
+
 .app {
     min-height: 100vh;
     display: none;
@@ -173,7 +243,7 @@ a {
 
 .app-ready .app {
     display: grid;
-    grid-template-columns: 255px minmax(0, 1fr);
+    grid-template-columns: 290px minmax(0, 1fr);
 }
 
 .sidebar {
@@ -241,7 +311,8 @@ td small,
 }
 
 .sidebar a {
-    padding: 13px 15px;
+    width: 100%;
+    padding: 15px 18px;
     border-radius: 6px;
     color: #263247;
     text-decoration: none;
@@ -278,7 +349,6 @@ td small,
 }
 
 .profile button {
-    grid-column: 1 / -1;
     margin-top: 16px;
     border: 0;
     background: transparent;
@@ -286,8 +356,13 @@ td small,
     font-weight: 800;
 }
 
+.profile form {
+    grid-column: 1 / -1;
+}
+
 .content {
-    width: min(1280px, 100%);
+    width: 100%;
+    max-width: 1680px;
     padding: 34px 36px 56px;
 }
 
@@ -340,6 +415,7 @@ p {
 .table-card,
 .list-card,
 .ward-card,
+.staff-card,
 .activity,
 .notice {
     background: #fff;
@@ -396,7 +472,7 @@ p {
 
 .dashboard-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.5fr) 380px;
+    grid-template-columns: minmax(0, 1.6fr) minmax(380px, .8fr);
     gap: 34px;
 }
 
@@ -413,6 +489,11 @@ p {
     text-decoration: none;
 }
 
+.ward-card {
+    color: inherit;
+    text-decoration: none;
+}
+
 .module-card strong,
 .module-card em {
     display: block;
@@ -424,6 +505,18 @@ p {
     font-style: normal;
 }
 
+.activity-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.activity-head small {
+    color: #69758b;
+    font-weight: 700;
+}
+
 .activity article {
     padding: 20px;
     border-bottom: 1px solid #edf1f6;
@@ -433,11 +526,20 @@ p {
     border-bottom: 0;
 }
 
+.activity time,
 .activity span,
 .activity small {
     display: block;
     margin-top: 5px;
     color: #69758b;
+}
+
+.activity time {
+    margin: 0 0 8px;
+    font-size: 12px;
+    font-weight: 900;
+    text-transform: uppercase;
+    color: #1769f6;
 }
 
 .toolbar {
@@ -447,13 +549,33 @@ p {
     margin-bottom: 14px;
 }
 
+.staff-toolbar {
+    grid-template-columns: 1fr;
+}
+
+.staff-toolbar small {
+    color: #69758b;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.empty-state {
+    margin-top: 14px;
+    padding: 18px;
+    border: 1px dashed #cad4e2;
+    color: #69758b;
+    background: #f8fbff;
+    text-align: center;
+    font-weight: 800;
+}
+
 .table-card {
     overflow-x: auto;
 }
 
 table {
     width: 100%;
-    min-width: 820px;
+    min-width: 1180px;
     border-collapse: collapse;
 }
 
@@ -506,30 +628,151 @@ td .avatar {
     font-weight: 800;
 }
 
+.inline-form {
+    display: inline;
+}
+
+.danger-link {
+    color: #c8193b;
+}
+
+.table-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.table-actions form {
+    margin: 0;
+}
+
+.table-actions .danger {
+    min-height: 34px;
+    padding: 0 12px;
+}
+
 .ward-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 22px;
 }
 
-.ward-card {
+.staff-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 22px;
+}
+
+.ward-card,
+.staff-card {
     overflow: hidden;
 }
 
-.ward-top {
+.ward-detail-list {
+    display: grid;
+    gap: 22px;
+    margin-top: 28px;
+}
+
+.ward-detail {
+    scroll-margin-top: 24px;
+    background: #fff;
+    border: 1px solid #e4e9f2;
+    border-radius: 8px;
+    box-shadow: 0 8px 20px rgba(33, 45, 70, .08);
+    padding: 22px;
+}
+
+.ward-detail header {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    border-bottom: 1px solid #edf1f6;
+    padding-bottom: 16px;
+}
+
+.ward-detail header h2,
+.ward-detail header p {
+    margin: 0;
+}
+
+.ward-detail header p {
+    margin-top: 4px;
+    color: #69758b;
+}
+
+.ward-detail header > span {
+    align-self: start;
+    border-radius: 999px;
+    background: #eaf2ff;
+    color: #1769f6;
+    padding: 7px 12px;
+    font-weight: 900;
+}
+
+.ward-detail-grid {
+    display: grid;
+    grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr);
+    gap: 22px;
+    padding-top: 18px;
+}
+
+.mini-list {
+    display: grid;
+    gap: 10px;
+}
+
+.mini-list article {
+    border: 1px solid #edf1f6;
+    border-radius: 8px;
+    padding: 14px;
+}
+
+.mini-list article.is-discharged {
+    border-color: #ffc7d0;
+    background: #fff0f2;
+}
+
+.mini-list strong,
+.mini-list span,
+.mini-list small {
+    display: block;
+}
+
+.mini-list span,
+.mini-list small {
+    margin-top: 4px;
+    color: #69758b;
+}
+
+.mini-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.ward-top,
+.staff-top {
     position: relative;
     padding: 22px;
     background: #1769f6;
     color: #fff;
 }
 
-.ward-top h3 {
+.staff-top {
+    background: #17a765;
+}
+
+.ward-top h3,
+.staff-top h3 {
     margin: 0;
     font-size: 26px;
     font-weight: 900;
 }
 
-.ward-top span {
+.ward-top span,
+.staff-top span {
     position: absolute;
     right: 22px;
     top: 24px;
@@ -540,7 +783,8 @@ td .avatar {
 }
 
 .ward-meta,
-.ward-foot {
+.ward-foot,
+.staff-meta {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 20px;
@@ -548,14 +792,40 @@ td .avatar {
 }
 
 .ward-meta span,
-.ward-foot span {
+.ward-foot span,
+.staff-meta span,
+.staff-detail span {
     color: #69758b;
 }
 
 .ward-meta strong,
-.ward-foot strong {
+.ward-foot strong,
+.staff-meta strong,
+.staff-detail strong {
     display: block;
     color: #152033;
+}
+
+.staff-detail {
+    display: grid;
+    gap: 12px;
+    padding: 0 22px 22px;
+}
+
+.staff-detail small {
+    display: block;
+    margin-top: 3px;
+}
+
+.staff-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 0 22px 22px;
+}
+
+.staff-actions form {
+    margin: 0;
 }
 
 .progress {
@@ -631,6 +901,11 @@ td .avatar {
     background: #fff5df;
 }
 
+.notice.error {
+    color: #8f1f2f;
+    background: #ffe8ec;
+}
+
 dialog {
     width: min(720px, calc(100vw - 32px));
     border: 0;
@@ -651,8 +926,15 @@ dialog::backdrop {
 }
 
 .modal-form h2,
+.modal-form h3,
 .modal-form div {
     grid-column: 1 / -1;
+}
+
+.modal-form h3 {
+    margin: 10px 0 0;
+    color: #263247;
+    font-size: 15px;
 }
 
 .modal-form div {
@@ -674,7 +956,9 @@ dialog::backdrop {
     .signin,
     .app-ready .app,
     .dashboard-grid,
-    .ward-grid {
+    .ward-grid,
+    .staff-grid,
+    .ward-detail-grid {
         grid-template-columns: 1fr;
     }
 
