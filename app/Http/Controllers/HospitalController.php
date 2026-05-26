@@ -14,7 +14,7 @@ class HospitalController extends Controller
 {
     private const PERMISSIONS = [
         'patients' => ['Medical Director', 'Doctor', 'Consultant', 'Charge Nurse', 'Nurse'],
-        'staff' => ['Medical Director'],
+        'staff' => ['Medical Director', 'Personnel Officer'],
         'admissions' => ['Medical Director', 'Charge Nurse'],
         'appointments' => ['Medical Director', 'Doctor', 'Consultant', 'Charge Nurse'],
         'medications' => ['Medical Director', 'Doctor', 'Consultant', 'Charge Nurse', 'Nurse'],
@@ -44,50 +44,12 @@ class HospitalController extends Controller
         ]);
     }
 
-    public function storePatient(Request $request)
+    protected function moduleRedirect(string $module, string $status)
     {
-        $this->authorizeModule('patients');
-        $validated = $this->validatePatient($request);
-
-        DB::transaction(function () use ($validated) {
-            $patient = $validated['patient'];
-            $patient['date_registered'] = now()->toDateString();
-
-            if ($this->usesStringKey('patients', 'patient_id')) {
-                $patientId = $this->nextPrefixedId('patients', 'patient_id', 'P', 5);
-                DB::table('patients')->insert($patient + ['patient_id' => $patientId]);
-            } else {
-                $patientId = DB::table('patients')->insertGetId($patient);
-            }
-
-            $this->savePatientDetails($patientId, $validated);
-        });
-
-        return back()->with('status', 'Patient registered successfully.');
+        return redirect()->route('hospital.index')->withFragment($module)->with('status', $status);
     }
 
-    public function updatePatient(Request $request, string $patient)
-    {
-        $this->authorizeModule('patients');
-        $validated = $this->validatePatient($request);
-
-        DB::transaction(function () use ($patient, $validated) {
-            DB::table('patients')->where('patient_id', $patient)->update($validated['patient']);
-            $this->savePatientDetails($patient, $validated, true);
-        });
-
-        return back()->with('status', 'Patient record updated successfully.');
-    }
-
-    public function destroyPatient(string $patient)
-    {
-        $this->authorizeModule('patients');
-        DB::table('patients')->where('patient_id', $patient)->delete();
-
-        return back()->with('status', 'Patient record deleted successfully.');
-    }
-
-    private function validatePatient(Request $request): array
+    protected function validatePatient(Request $request): array
     {
         $validated = $request->validate([
             'first_name' => ['required', 'string', 'max:50'],
@@ -134,7 +96,7 @@ class HospitalController extends Controller
         ];
     }
 
-    private function savePatientDetails(string|int $patientId, array $validated, bool $replace = false): void
+    protected function savePatientDetails(string|int $patientId, array $validated, bool $replace = false): void
     {
         if ($replace) {
             if (Schema::hasTable('next_of_kin')) {
@@ -147,7 +109,11 @@ class HospitalController extends Controller
         }
 
         if (Schema::hasTable('next_of_kin') && $this->hasRequiredValues($validated['kin'], ['full_name', 'relationship', 'address'])) {
-            DB::table('next_of_kin')->insert($validated['kin'] + ['patient_id' => $patientId]);
+            DB::table('next_of_kin')->insert(
+                $validated['kin']
+                + ['patient_id' => $patientId]
+                + $this->keyForInsert('next_of_kin', 'kin_id', 'K', 5, (string) $patientId)
+            );
         }
 
         if (
@@ -168,177 +134,11 @@ class HospitalController extends Controller
                 'patient_id' => $patientId,
                 'doctor_id' => $doctorId,
                 'referral_date' => $validated['referral_date'] ?? now()->toDateString(),
-            ]);
+            ] + $this->keyForInsert('patient_referrals', 'referral_id', 'R', 5, (string) $patientId));
         }
     }
 
-    public function storeStaff(Request $request)
-    {
-        $this->authorizeModule('staff');
-        $validated = $this->validateStaff($request);
-
-        DB::transaction(function () use ($validated) {
-            if ($this->usesStringKey('staff', 'staff_id')) {
-                $staffId = $this->nextStaffNumber();
-                DB::table('staff')->insert($this->onlyExistingColumns('staff', $validated['staff'] + ['staff_id' => $staffId]));
-            } else {
-                $staffId = DB::table('staff')->insertGetId($this->onlyExistingColumns('staff', $validated['staff']));
-            }
-
-            $this->saveStaffDetails($staffId, $validated);
-        });
-
-        return back()->with('status', 'Staff record added successfully.');
-    }
-
-    public function updateStaff(Request $request, string $staff)
-    {
-        $this->authorizeModule('staff');
-        $validated = $this->validateStaff($request, $staff);
-
-        DB::transaction(function () use ($staff, $validated) {
-            DB::table('staff')->where('staff_id', $staff)->update($this->onlyExistingColumns('staff', $validated['staff']));
-            $this->saveStaffDetails($staff, $validated, true);
-        });
-
-        return back()->with('status', 'Staff record updated successfully.');
-    }
-
-    public function destroyStaff(string $staff)
-    {
-        $this->authorizeModule('staff');
-        DB::table('staff')->where('staff_id', $staff)->delete();
-
-        return back()->with('status', 'Staff record deleted successfully.');
-    }
-
-    public function approveAccountRequest(string $request)
-    {
-        $this->authorizeModule('staff');
-
-        DB::transaction(function () use ($request) {
-            $accountRequest = DB::table('account_requests')
-                ->where('request_id', $request)
-                ->where('status', 'Pending')
-                ->lockForUpdate()
-                ->first();
-
-            abort_unless($accountRequest, 404);
-
-            $staffId = $this->nextStaffNumber();
-            $staff = [
-                'staff_id' => $staffId,
-                'first_name' => $accountRequest->first_name,
-                'last_name' => $accountRequest->last_name,
-                'address' => null,
-                'phone' => null,
-                'date_of_birth' => null,
-                'sex' => null,
-                'nin' => 'PENDING-' . $staffId,
-                'position' => $accountRequest->role,
-                'salary' => null,
-                'salary_scale' => null,
-            ];
-
-            DB::table('staff')->insert($this->onlyExistingColumns('staff', $staff));
-
-            DB::table('users')->updateOrInsert(
-                ['email' => $accountRequest->email],
-                [
-                    'name' => trim($accountRequest->first_name . ' ' . $accountRequest->last_name),
-                    'microsoft_email' => null,
-                    'hospital_id' => $staffId,
-                    'role' => $accountRequest->role,
-                    'password' => $accountRequest->password,
-                    'updated_at' => now(),
-                    'created_at' => now(),
-                ]
-            );
-
-            DB::table('account_requests')->where('request_id', $request)->update([
-                'status' => 'Approved',
-                'approved_by' => auth()->id(),
-                'approved_at' => now(),
-                'updated_at' => now(),
-            ]);
-        });
-
-        return back()->with('status', 'Account request approved and staff login created.');
-    }
-
-    public function rejectAccountRequest(string $request)
-    {
-        $this->authorizeModule('staff');
-
-        DB::table('account_requests')->where('request_id', $request)->where('status', 'Pending')->update([
-            'status' => 'Rejected',
-            'approved_by' => auth()->id(),
-            'approved_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        return back()->with('status', 'Account request rejected.');
-    }
-
-    public function updateAdmission(Request $request, string $admission)
-    {
-        $this->authorizeModule('admissions');
-        $validated = $this->validateAdmission($request);
-
-        DB::transaction(function () use ($admission, $validated) {
-            $previousBedId = DB::table('admissions')->where('admission_id', $admission)->value('bed_id');
-            DB::table('admissions')->where('admission_id', $admission)->update($validated);
-
-            if ($previousBedId) {
-                $this->syncBedStatus($previousBedId);
-            }
-
-            if (! empty($validated['bed_id'])) {
-                $this->syncBedStatus($validated['bed_id']);
-            }
-        });
-
-        return back()->with('status', 'Ward admission updated successfully.');
-    }
-
-    public function destroyAdmission(string $admission)
-    {
-        $this->authorizeModule('admissions');
-        $bedId = DB::table('admissions')->where('admission_id', $admission)->value('bed_id');
-
-        DB::transaction(function () use ($admission, $bedId) {
-            DB::table('admissions')->where('admission_id', $admission)->delete();
-
-            if ($bedId) {
-                $this->syncBedStatus($bedId);
-            }
-        });
-
-        return back()->with('status', 'Ward admission deleted successfully.');
-    }
-
-    public function storeAdmission(Request $request)
-    {
-        $this->authorizeModule('admissions');
-        $validated = $this->validateAdmission($request);
-
-        DB::transaction(function () use ($validated) {
-            if ($this->usesStringKey('admissions', 'admission_id')) {
-                $admissionId = $this->nextPrefixedId('admissions', 'admission_id', 'A', 5, $validated['patient_id'] ?? null);
-                DB::table('admissions')->insert($validated + ['admission_id' => $admissionId]);
-            } else {
-                DB::table('admissions')->insert($validated);
-            }
-
-            if (! empty($validated['bed_id'])) {
-                $this->syncBedStatus($validated['bed_id']);
-            }
-        });
-
-        return back()->with('status', 'Ward admission recorded successfully.');
-    }
-
-    private function validateAdmission(Request $request): array
+    protected function validateAdmission(Request $request): array
     {
         return $request->validate([
             'patient_id' => ['required', 'exists:patients,patient_id'],
@@ -352,7 +152,7 @@ class HospitalController extends Controller
         ]);
     }
 
-    private function syncBedStatus(string|int $bedId): void
+    protected function syncBedStatus(string|int $bedId): void
     {
         if (! Schema::hasTable('beds') || ! Schema::hasTable('admissions')) {
             return;
@@ -368,7 +168,7 @@ class HospitalController extends Controller
         ]);
     }
 
-    private function validateStaff(Request $request, string|int|null $staffId = null): array
+    protected function validateStaff(Request $request, string|int|null $staffId = null): array
     {
         $validated = $request->validate([
             'first_name' => ['required', 'string', 'max:50'],
@@ -382,14 +182,14 @@ class HospitalController extends Controller
             'salary' => ['required', 'numeric', 'min:0'],
             'salary_scale' => ['nullable', 'string', 'max:20'],
             'hours_per_week' => ['nullable', 'numeric', 'min:0', 'max:168'],
-            'contract_type' => ['nullable', 'string', 'max:20'],
+            'contract_type' => ['nullable', Rule::in(['Permanent', 'Temporary'])],
             'payment_type' => ['nullable', 'string', 'max:20'],
             'qualification_type' => ['nullable', 'string', 'max:100'],
             'institution' => ['nullable', 'string', 'max:100'],
             'date_obtained' => ['nullable', 'date'],
             'ward_id' => ['nullable', 'exists:wards,ward_id'],
             'ward_role' => ['nullable', 'string', 'max:100'],
-            'shift' => ['nullable', 'string', 'max:30'],
+            'shift' => ['nullable', Rule::in(['Early', 'Late', 'Night'])],
             'experience_position' => ['nullable', 'string', 'max:50'],
             'organization' => ['nullable', 'string', 'max:100'],
             'start_date' => ['nullable', 'date'],
@@ -414,7 +214,7 @@ class HospitalController extends Controller
             'ward_staff' => [
                 'ward_id' => $validated['ward_id'] ?? null,
                 'role' => $validated['ward_role'] ?? ($validated['position'] ?? null),
-                'shift' => $validated['shift'] ?? (filled($validated['ward_id'] ?? null) ? 'Day' : null),
+                'shift' => $validated['shift'] ?? (filled($validated['ward_id'] ?? null) ? 'Early' : null),
             ],
             'experience' => [
                 'staff_position' => $validated['experience_position'] ?? null,
@@ -426,7 +226,7 @@ class HospitalController extends Controller
         ];
     }
 
-    private function saveStaffDetails(string|int $staffId, array $validated, bool $replace = false): void
+    protected function saveStaffDetails(string|int $staffId, array $validated, bool $replace = false): void
     {
         if ($replace) {
             foreach (['staff_contracts', 'qualifications', 'work_experience', 'ward_staff'] as $table) {
@@ -462,7 +262,7 @@ class HospitalController extends Controller
         }
     }
 
-    private function hasRequiredValues(array $values, array $keys): bool
+    protected function hasRequiredValues(array $values, array $keys): bool
     {
         foreach ($keys as $key) {
             if (! filled($values[$key] ?? null)) {
@@ -473,7 +273,7 @@ class HospitalController extends Controller
         return true;
     }
 
-    private function usesStringKey(string $table, string $column): bool
+    protected function usesStringKey(string $table, string $column): bool
     {
         if (! Schema::hasColumn($table, $column)) {
             return false;
@@ -491,48 +291,51 @@ class HospitalController extends Controller
         return str_contains((string) Schema::getColumnType($table, $column), 'char');
     }
 
-    private function nextStaffNumber(): string
+    protected function nextStaffNumber(): string
     {
-        return $this->nextPrefixedId('staff', 'staff_id', 'S', 3);
+        $lastStaffId = DB::table('staff')
+            ->where('staff_id', 'like', 'S%')
+            ->orderByDesc('staff_id')
+            ->value('staff_id');
+
+        $lastUserId = Schema::hasTable('users') && Schema::hasColumn('users', 'hospital_id')
+            ? DB::table('users')->where('hospital_id', 'like', 'S%')->orderByDesc('hospital_id')->value('hospital_id')
+            : null;
+
+        $next = max(
+            (int) preg_replace('/\D/', '', (string) $lastStaffId),
+            (int) preg_replace('/\D/', '', (string) $lastUserId),
+        ) + 1;
+
+        do {
+            $staffId = 'S' . str_pad((string) $next, 3, '0', STR_PAD_LEFT);
+            $next++;
+        } while (
+            DB::table('staff')->where('staff_id', $staffId)->exists()
+            || (
+                Schema::hasTable('users')
+                && Schema::hasColumn('users', 'hospital_id')
+                && DB::table('users')->where('hospital_id', $staffId)->exists()
+            )
+        );
+
+        return $staffId;
     }
 
-    public function storeAppointment(Request $request)
-    {
-        $this->authorizeModule('appointments');
-        $validated = $this->validateAppointment($request);
-
-        DB::table('appointments')->insert($validated + $this->keyForInsert('appointments', 'appointment_id', 'AP', 5, $validated['patient_id'] ?? null));
-
-        return back()->with('status', 'Appointment scheduled successfully.');
-    }
-
-    public function updateAppointment(Request $request, string $appointment)
-    {
-        $this->authorizeModule('appointments');
-        $validated = $this->validateAppointment($request);
-
-        DB::table('appointments')->where('appointment_id', $appointment)->update($validated);
-
-        return back()->with('status', 'Appointment updated successfully.');
-    }
-
-    public function destroyAppointment(string $appointment)
-    {
-        $this->authorizeModule('appointments');
-        DB::table('appointments')->where('appointment_id', $appointment)->delete();
-
-        return back()->with('status', 'Appointment deleted successfully.');
-    }
-
-    private function validateAppointment(Request $request): array
+    protected function validateAppointment(Request $request): array
     {
         $validated = $request->validate([
             'patient_id' => ['required', 'exists:patients,patient_id'],
             'consultant_id' => ['required', 'exists:staff,staff_id'],
-            'appointment_date' => ['required', 'date'],
+            'appointment_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today', 'before_or_equal:2099-12-31'],
             'appointment_time' => ['required'],
             'room' => ['required', 'string', 'max:50'],
             'recommendation' => ['nullable', 'string', 'max:30'],
+            'admission_ward_id' => ['nullable', 'exists:wards,ward_id'],
+            'admission_bed_id' => ['nullable', 'exists:beds,bed_id'],
+        ], [
+            'appointment_date.after_or_equal' => 'Appointment date must be today or a future date.',
+            'appointment_date.before_or_equal' => 'Appointment date must use a valid year.',
         ]);
 
         if (! Schema::hasColumn('appointments', 'recommendation')) {
@@ -542,35 +345,85 @@ class HospitalController extends Controller
         return $validated;
     }
 
-    public function storeMedication(Request $request)
+    protected function appointmentColumns(array $validated): array
     {
-        $this->authorizeModule('medications');
-        $validated = $this->validateMedication($request);
-
-        DB::table('patient_medication')->insert($validated);
-
-        return back()->with('status', 'Medication prescribed successfully.');
+        return collect($validated)->only([
+            'patient_id',
+            'consultant_id',
+            'appointment_date',
+            'appointment_time',
+            'room',
+            'recommendation',
+        ])->all();
     }
 
-    public function updateMedication(Request $request, string $medication)
+    protected function syncAppointmentRecommendation(string|int $appointmentId, array $validated): void
     {
-        $this->authorizeModule('medications');
-        $validated = $this->validateMedication($request);
+        $recommendation = $validated['recommendation'] ?? null;
+        $patientId = $validated['patient_id'];
 
-        DB::table('patient_medication')->where('medication_id', $medication)->update($validated);
+        if (Schema::hasTable('outpatients')) {
+            if ($recommendation === 'Out-Patient Clinic') {
+                $existing = DB::table('outpatients')->where('appointment_id', $appointmentId)->exists();
 
-        return back()->with('status', 'Medication updated successfully.');
+                if ($existing) {
+                    DB::table('outpatients')->where('appointment_id', $appointmentId)->update([
+                        'patient_id' => $patientId,
+                    ]);
+                } else {
+                    DB::table('outpatients')->insert([
+                        'patient_id' => $patientId,
+                        'appointment_id' => $appointmentId,
+                    ] + $this->keyForInsert('outpatients', 'outpatient_id', 'OP', 5, (string) $patientId));
+                }
+            } else {
+                DB::table('outpatients')->where('appointment_id', $appointmentId)->delete();
+            }
+        }
+
+        if (! in_array($recommendation, ['Waiting List', 'In-Patient Admission'], true) || ! Schema::hasTable('admissions')) {
+            return;
+        }
+
+        $wardId = $validated['admission_ward_id'] ?? DB::table('wards')->orderBy('ward_id')->value('ward_id');
+
+        if (! $wardId) {
+            return;
+        }
+
+        $bedId = $validated['admission_bed_id'] ?? null;
+        $admission = $this->onlyExistingColumns('admissions', [
+            'patient_id' => $patientId,
+            'ward_id' => $wardId,
+            'bed_id' => $bedId,
+            'date_placed_on_waiting_list' => $validated['appointment_date'] ?? now()->toDateString(),
+            'date_admitted' => $recommendation === 'In-Patient Admission' ? ($validated['appointment_date'] ?? now()->toDateString()) : null,
+            'actual_leave_date' => null,
+        ]);
+
+        $existingAdmissionId = DB::table('admissions')
+            ->where('patient_id', $patientId)
+            ->whereNull('actual_leave_date')
+            ->orderByDesc('admission_id')
+            ->value('admission_id');
+
+        if ($existingAdmissionId) {
+            $previousBedId = DB::table('admissions')->where('admission_id', $existingAdmissionId)->value('bed_id');
+            DB::table('admissions')->where('admission_id', $existingAdmissionId)->update($admission);
+
+            if ($previousBedId) {
+                $this->syncBedStatus($previousBedId);
+            }
+        } else {
+            DB::table('admissions')->insert($admission + $this->keyForInsert('admissions', 'admission_id', 'A', 5, (string) $patientId));
+        }
+
+        if ($bedId) {
+            $this->syncBedStatus($bedId);
+        }
     }
 
-    public function destroyMedication(string $medication)
-    {
-        $this->authorizeModule('medications');
-        DB::table('patient_medication')->where('medication_id', $medication)->delete();
-
-        return back()->with('status', 'Medication deleted successfully.');
-    }
-
-    private function validateMedication(Request $request): array
+    protected function validateMedication(Request $request): array
     {
         $validated = $request->validate([
             'patient_id' => ['required', 'exists:patients,patient_id'],
@@ -588,7 +441,7 @@ class HospitalController extends Controller
         return $validated;
     }
 
-    private function keyForInsert(string $table, string $column, string $prefix, int $width = 3, ?string $preferredSource = null): array
+    protected function keyForInsert(string $table, string $column, string $prefix, int $width = 3, ?string $preferredSource = null): array
     {
         if (! $this->usesStringKey($table, $column)) {
             return [];
@@ -597,7 +450,7 @@ class HospitalController extends Controller
         return [$column => $this->nextPrefixedId($table, $column, $prefix, $width, $preferredSource)];
     }
 
-    private function nextPrefixedId(string $table, string $column, string $prefix, int $width = 3, ?string $preferredSource = null): string
+    protected function nextPrefixedId(string $table, string $column, string $prefix, int $width = 3, ?string $preferredSource = null): string
     {
         $number = $preferredSource ? (int) preg_replace('/\D/', '', $preferredSource) : 0;
 
@@ -618,14 +471,14 @@ class HospitalController extends Controller
         return $id;
     }
 
-    private function onlyExistingColumns(string $table, array $row): array
+    protected function onlyExistingColumns(string $table, array $row): array
     {
         return collect($row)
             ->filter(fn ($value, string $column) => Schema::hasColumn($table, $column))
             ->all();
     }
 
-    private function authorizeModule(string $module): void
+    protected function authorizeModule(string $module): void
     {
         $role = auth()->user()?->role;
 
@@ -692,7 +545,9 @@ class HospitalController extends Controller
                     )
                     ->groupBy('wards.ward_id', 'wards.ward_name', 'wards.location', 'wards.total_beds', 'wards.tel_extension')
                     ->orderBy('wards.ward_id')
-                    ->get();
+                    ->get()
+                    ->sortBy(fn ($ward) => (int) preg_replace('/\D+/', '', (string) $ward->ward_id))
+                    ->values();
             }
 
             if (Schema::hasTable('beds')) {
@@ -731,9 +586,14 @@ class HospitalController extends Controller
             }
 
             if (Schema::hasTable('patient_medication')) {
-                $medicationMethodSelect = Schema::hasColumn('patient_medication', 'method_of_admin')
-                    ? DB::raw('coalesce(patient_medication.method_of_admin, drugs.method_of_admin) as method_of_admin')
-                    : 'drugs.method_of_admin';
+                $hasMedicationMethod = Schema::hasColumn('patient_medication', 'method_of_admin');
+                $hasDrugMethod = Schema::hasColumn('drugs', 'method_of_admin');
+                $medicationMethodSelect = match (true) {
+                    $hasMedicationMethod && $hasDrugMethod => DB::raw('coalesce(patient_medication.method_of_admin, drugs.method_of_admin) as method_of_admin'),
+                    $hasMedicationMethod => DB::raw('patient_medication.method_of_admin as method_of_admin'),
+                    $hasDrugMethod => DB::raw('drugs.method_of_admin as method_of_admin'),
+                    default => DB::raw("null as method_of_admin"),
+                };
 
                 $medications = DB::table('patient_medication')
                     ->join('patients', 'patient_medication.patient_id', '=', 'patients.patient_id')
@@ -852,9 +712,24 @@ class HospitalController extends Controller
                 ->keyBy('patient_id');
         }
 
-        return $patients->map(function ($patient) use ($kin, $referrals) {
+        $appointments = collect();
+
+        if (Schema::hasTable('appointments')) {
+            $appointments = DB::table('appointments')
+                ->leftJoin('staff', 'appointments.consultant_id', '=', 'staff.staff_id')
+                ->whereIn('appointments.patient_id', $patientIds)
+                ->select('appointments.*', 'staff.first_name as consultant_first_name', 'staff.last_name as consultant_last_name')
+                ->orderByDesc('appointments.appointment_date')
+                ->orderByDesc('appointments.appointment_time')
+                ->get()
+                ->unique('patient_id')
+                ->keyBy('patient_id');
+        }
+
+        return $patients->map(function ($patient) use ($kin, $referrals, $appointments) {
             $patientKin = $kin->get($patient->patient_id);
             $referral = $referrals->get($patient->patient_id);
+            $appointment = $appointments->get($patient->patient_id);
 
             $patient->kin_name = $patientKin->full_name ?? null;
             $patient->kin_relationship = $patientKin->relationship ?? null;
@@ -865,6 +740,12 @@ class HospitalController extends Controller
             $patient->doctor_address = $referral->doctor_address ?? null;
             $patient->doctor_phone = $referral->doctor_phone ?? null;
             $patient->referral_date = $referral->referral_date ?? null;
+            $patient->appointment_id = $appointment->appointment_id ?? null;
+            $patient->appointment_date = $appointment->appointment_date ?? null;
+            $patient->appointment_time = $appointment->appointment_time ?? null;
+            $patient->appointment_room = $appointment->room ?? null;
+            $patient->appointment_recommendation = $appointment->recommendation ?? null;
+            $patient->appointment_consultant = trim(($appointment->consultant_first_name ?? '') . ' ' . ($appointment->consultant_last_name ?? '')) ?: null;
 
             return $patient;
         });
@@ -929,7 +810,7 @@ class HospitalController extends Controller
 
         $staff = collect([
             (object) ['staff_id' => 1, 'first_name' => 'Moira', 'last_name' => 'Samuel', 'position' => 'Charge Nurse', 'address' => '49 School Road Broxburn', 'phone' => '01506-45633', 'date_of_birth' => '1961-05-30', 'sex' => 'Female', 'nin' => 'WB123423D', 'salary' => 18760.00, 'salary_scale' => '1C', 'ward_name' => 'Orthopaedic', 'tel_extension' => '7711', 'shift' => 'Early', 'hours_per_week' => 40.00, 'contract_type' => 'Permanent', 'payment_type' => 'Monthly', 'qualification_type' => 'Bachelor of Science in Nursing', 'institution' => 'University of Edinburgh', 'date_obtained' => '2010-06-15', 'experience_position' => 'Senior Resident', 'organization' => 'Jr. Borja General Hospital', 'start_date' => '2012-06-01', 'end_date' => '2025-12-31'],
-            (object) ['staff_id' => 2, 'first_name' => 'Anna', 'last_name' => 'Cruz', 'position' => 'Nurse', 'address' => 'CDO', 'phone' => '09170001111', 'date_of_birth' => '1988-07-12', 'sex' => 'Female', 'nin' => 'AB123', 'salary' => 15000.00, 'salary_scale' => '1A', 'ward_name' => 'Out-Patient Clinic', 'tel_extension' => '7722', 'shift' => 'Day', 'hours_per_week' => 40.00, 'contract_type' => 'Permanent', 'payment_type' => 'Monthly', 'qualification_type' => 'Doctor of Medicine (MD)', 'institution' => 'Harvard Medical School', 'date_obtained' => '2008-05-20', 'experience_position' => 'Staff Nurse', 'organization' => 'Jr. Borja General Hospital', 'start_date' => '2014-03-01', 'end_date' => '2024-12-15'],
+            (object) ['staff_id' => 2, 'first_name' => 'Anna', 'last_name' => 'Cruz', 'position' => 'Nurse', 'address' => 'CDO', 'phone' => '09170001111', 'date_of_birth' => '1988-07-12', 'sex' => 'Female', 'nin' => 'AB123', 'salary' => 15000.00, 'salary_scale' => '1A', 'ward_name' => 'Out-Patient Clinic', 'tel_extension' => '7722', 'shift' => 'Late', 'hours_per_week' => 40.00, 'contract_type' => 'Permanent', 'payment_type' => 'Monthly', 'qualification_type' => 'Doctor of Medicine (MD)', 'institution' => 'Harvard Medical School', 'date_obtained' => '2008-05-20', 'experience_position' => 'Staff Nurse', 'organization' => 'Jr. Borja General Hospital', 'start_date' => '2014-03-01', 'end_date' => '2024-12-15'],
             (object) ['staff_id' => 3, 'first_name' => 'Leo', 'last_name' => 'Martinez', 'position' => 'Doctor', 'address' => 'CDO', 'phone' => '09170002222', 'date_of_birth' => '1980-02-20', 'sex' => 'Male', 'nin' => 'CD456', 'salary' => 30000.00, 'salary_scale' => '2B', 'ward_name' => 'General', 'tel_extension' => '7713', 'shift' => 'Night', 'hours_per_week' => 38.00, 'contract_type' => 'Permanent', 'payment_type' => 'Monthly', 'qualification_type' => 'Bachelor of Science in Nursing', 'institution' => 'Johns Hopkins University', 'date_obtained' => '2009-03-20', 'experience_position' => 'Junior Doctor', 'organization' => 'Jr. Borja General Hospital', 'start_date' => '2014-01-10', 'end_date' => '2025-06-30'],
         ]);
 

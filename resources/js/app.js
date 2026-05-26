@@ -1,13 +1,46 @@
 import './bootstrap';
 
+const applyTheme = (theme) => {
+    const isDark = theme === 'dark';
+
+    document.body.classList.toggle('theme-dark', isDark);
+    document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
+        button.setAttribute('aria-pressed', String(isDark));
+    });
+    document.querySelectorAll('[data-theme-toggle-icon]').forEach((node) => {
+        node.textContent = isDark ? 'Night' : 'Light';
+    });
+    document.querySelectorAll('[data-theme-toggle-label]').forEach((node) => {
+        node.textContent = isDark ? 'Night Mode' : 'Light Mode';
+    });
+};
+
+const savedTheme = localStorage.getItem('wellmeadows-theme') || 'light';
+applyTheme(savedTheme);
+
+document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
+    button.addEventListener('click', () => {
+        const nextTheme = document.body.classList.contains('theme-dark') ? 'light' : 'dark';
+        localStorage.setItem('wellmeadows-theme', nextTheme);
+        applyTheme(nextTheme);
+    });
+});
+
 const showScreen = () => {
     const target = (location.hash || '#dashboard').replace('#', '');
     const section = target.startsWith('ward-detail-') ? 'wards' : target;
+    const selectedWard = target.startsWith('ward-detail-') ? target.replace('ward-detail-', '') : null;
     document.querySelectorAll('.screen').forEach((screen) => {
         screen.classList.toggle('active', screen.id === `${section}-screen`);
     });
     document.querySelectorAll('[data-nav]').forEach((link) => {
         link.classList.toggle('active', link.dataset.nav === section);
+    });
+    document.querySelectorAll('[data-ward-card]').forEach((card) => {
+        card.classList.toggle('is-highlighted', card.dataset.wardCard === selectedWard);
+    });
+    document.querySelectorAll('[data-ward-detail]').forEach((detail) => {
+        detail.classList.toggle('is-highlighted', detail.dataset.wardDetail === selectedWard);
     });
 
     if (target.startsWith('ward-detail-')) {
@@ -55,25 +88,33 @@ document.querySelectorAll('[data-search]').forEach((input) => {
     input.addEventListener('input', () => updateTableFilter(input.dataset.search));
 });
 
+document.querySelectorAll('[data-table-search-button]').forEach((button) => {
+    button.addEventListener('click', () => updateTableFilter(button.dataset.tableSearchButton));
+});
+
 document.querySelectorAll('[data-table-filter]').forEach((select) => {
     select.addEventListener('change', () => updateTableFilter(select.dataset.tableFilter));
     updateTableFilter(select.dataset.tableFilter);
 });
 
-document.querySelectorAll('[data-local-doctor-select]').forEach((select) => {
-    select.addEventListener('change', () => {
-        const form = select.closest('form');
-        const selected = select.selectedOptions[0];
+const updateLocalDoctorFields = (input) => {
+    const form = input.closest('form');
+    const datalist = input.list;
+    const selected = [...(datalist?.options || [])].find((option) => option.value === input.value);
 
-        if (!form || !selected?.value) {
-            return;
-        }
+    if (!form || !selected) {
+        return;
+    }
 
-        form.querySelector('[name="doctor_full_name"]').value = selected.dataset.name || '';
-        form.querySelector('[name="clinic_number"]').value = selected.dataset.clinic || '';
-        form.querySelector('[name="doctor_address"]').value = selected.dataset.address || '';
-        form.querySelector('[name="doctor_phone"]').value = selected.dataset.phone || '';
-    });
+    form.querySelector('[name="doctor_full_name"]').value = selected.dataset.name || '';
+    form.querySelector('[name="clinic_number"]').value = selected.dataset.clinic || '';
+    form.querySelector('[name="doctor_address"]').value = selected.dataset.address || '';
+    form.querySelector('[name="doctor_phone"]').value = selected.dataset.phone || '';
+};
+
+document.querySelectorAll('[data-local-doctor-input]').forEach((input) => {
+    input.addEventListener('change', () => updateLocalDoctorFields(input));
+    input.addEventListener('input', () => updateLocalDoctorFields(input));
 });
 
 const updateBedOptions = (wardSelect) => {
@@ -99,7 +140,7 @@ const updateBedOptions = (wardSelect) => {
     }
 };
 
-document.querySelectorAll('form select[name="ward_id"]').forEach((select) => {
+document.querySelectorAll('form select[name="ward_id"], form [data-ward-select]').forEach((select) => {
     select.addEventListener('change', () => updateBedOptions(select));
     updateBedOptions(select);
 });
@@ -108,7 +149,7 @@ document.querySelectorAll('[data-card-search]').forEach((input) => {
     const updateCardSearch = () => {
         const needle = input.value.trim().toLowerCase();
         const grid = document.querySelector(`.${input.dataset.cardSearch}`);
-        const cards = grid ? [...grid.querySelectorAll('article')] : [];
+        const cards = grid ? [...grid.querySelectorAll('article, a')] : [];
         let visible = 0;
 
         cards.forEach((card) => {
@@ -123,7 +164,9 @@ document.querySelectorAll('[data-card-search]').forEach((input) => {
 
         const results = input.dataset.resultsTarget ? document.getElementById(input.dataset.resultsTarget) : null;
         if (results) {
-            const noun = visible === 1 ? 'staff record' : 'staff records';
+            const singular = input.dataset.resultLabelSingular || 'staff record';
+            const plural = input.dataset.resultLabelPlural || 'staff records';
+            const noun = visible === 1 ? singular : plural;
             results.textContent = needle ? `${visible} ${noun} found` : `${visible} ${noun} shown`;
         }
 
@@ -138,6 +181,14 @@ document.querySelectorAll('[data-card-search]').forEach((input) => {
     });
 
     updateCardSearch();
+});
+
+document.querySelectorAll('[data-search-button]').forEach((button) => {
+    button.addEventListener('click', () => {
+        const input = document.querySelector(`[data-card-search="${button.dataset.searchButton}"]`);
+        input?.dispatchEvent(new Event('input', { bubbles: true }));
+        input?.focus();
+    });
 });
 
 const showAuthForm = (name) => {

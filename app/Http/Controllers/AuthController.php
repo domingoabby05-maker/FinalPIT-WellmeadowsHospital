@@ -14,10 +14,9 @@ class AuthController extends Controller
 {
     private const ROLES = [
         'Medical Director',
-        'Doctor',
+        'Personnel Officer',
         'Consultant',
         'Charge Nurse',
-        'Nurse',
     ];
 
     public function login(Request $request)
@@ -78,8 +77,15 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
+        $email = strtolower($validated['email']);
+        $user = User::whereRaw('lower(email) = ?', [$email])->first();
+
+        if (! $user && $validated['password'] === '12345678') {
+            $user = $this->syncStaffEmailLogin($email);
+        }
+
         return $this->attemptLogin($request, [
-            'email' => strtolower($validated['email']),
+            'email' => $user?->email ?? $email,
             'password' => $validated['password'],
         ], 'email');
     }
@@ -98,16 +104,34 @@ class AuthController extends Controller
             $staff = DB::table('staff')->where('staff_id', $hospitalId)->first();
 
             if ($staff) {
+                $role = $this->roleFromStaffPosition($staff->staff_position ?? $staff->position ?? $validated['role']);
+
+                if (! $this->canLoginWithRole($role)) {
+                    throw ValidationException::withMessages([
+                        'role' => 'This role is not allowed to sign in.',
+                    ]);
+                }
+
+                if ($role !== $validated['role']) {
+                    throw ValidationException::withMessages([
+                        'role' => 'The selected role does not match this Hospital ID.',
+                    ]);
+                }
+
                 $user = User::firstOrCreate(
                     ['hospital_id' => $hospitalId],
                     [
                         'name' => trim(($staff->first_name ?? '') . ' ' . ($staff->last_name ?? '')),
                         'email' => strtolower($hospitalId) . '@wellmeadows.local',
                         'microsoft_email' => null,
-                        'role' => $this->roleFromStaffPosition($staff->staff_position ?? $staff->position ?? $validated['role']),
+                        'role' => $role,
                         'password' => Hash::make('12345678'),
                     ]
                 );
+
+                if ($user->role !== $role) {
+                    $user->forceFill(['role' => $role])->save();
+                }
 
                 if (! Hash::check('12345678', $user->password)) {
                     $user->forceFill(['password' => Hash::make('12345678')])->save();
@@ -130,6 +154,14 @@ class AuthController extends Controller
     private function attemptLogin(Request $request, array $credentials, string $method)
     {
         if (Auth::attempt($credentials, $request->boolean('remember'))) {
+            if (! $this->canLoginWithRole(Auth::user()?->role)) {
+                Auth::logout();
+
+                throw ValidationException::withMessages([
+                    $method => 'This role is not allowed to sign in.',
+                ]);
+            }
+
             $request->session()->regenerate();
 
             return redirect()->route('hospital.index');
@@ -167,6 +199,52 @@ class AuthController extends Controller
         return $hospitalId;
     }
 
+    private function syncStaffEmailLogin(string $email): ?User
+    {
+        $nameParts = explode('.', strstr($email, '@', true) ?: '');
+
+        if (count($nameParts) < 2) {
+            return null;
+        }
+
+        $staff = DB::table('staff')
+            ->whereRaw('lower(first_name) = ?', [strtolower($nameParts[0])])
+            ->whereRaw('lower(last_name) = ?', [strtolower($nameParts[1])])
+            ->first();
+
+        if (! $staff) {
+            return null;
+        }
+
+        $role = $this->roleFromStaffPosition($staff->staff_position ?? $staff->position ?? 'Charge Nurse');
+
+        if (! $this->canLoginWithRole($role)) {
+            return null;
+        }
+
+        $user = User::where('hospital_id', $staff->staff_id)->first();
+
+        if ($user) {
+            $user->forceFill([
+                'name' => trim(($staff->first_name ?? '') . ' ' . ($staff->last_name ?? '')),
+                'email' => $email,
+                'role' => $role,
+                'password' => Hash::make('12345678'),
+            ])->save();
+
+            return $user;
+        }
+
+        return User::create([
+            'name' => trim(($staff->first_name ?? '') . ' ' . ($staff->last_name ?? '')),
+            'email' => $email,
+            'microsoft_email' => null,
+            'hospital_id' => $staff->staff_id,
+            'role' => $role,
+            'password' => Hash::make('12345678'),
+        ]);
+    }
+
     private function nameFromAddress(string $address): string
     {
         $localPart = strstr($address, '@', true) ?: $address;
@@ -180,11 +258,15 @@ class AuthController extends Controller
 
         return match (true) {
             str_contains($position, 'medical director') => 'Medical Director',
+            str_contains($position, 'personnel officer') => 'Personnel Officer',
             str_contains($position, 'consultant') => 'Consultant',
-            str_contains($position, 'doctor') => 'Doctor',
             str_contains($position, 'charge nurse') => 'Charge Nurse',
-            str_contains($position, 'nurse') => 'Nurse',
-            default => 'Nurse',
+            default => 'Charge Nurse',
         };
+    }
+
+    private function canLoginWithRole(?string $role): bool
+    {
+        return in_array($role, self::ROLES, true);
     }
 }

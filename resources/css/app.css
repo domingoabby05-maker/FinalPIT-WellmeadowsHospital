@@ -335,6 +335,26 @@ td small,
     column-gap: 12px;
 }
 
+.profile-identity {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+}
+
+.profile-identity strong,
+.profile-identity small {
+    overflow-wrap: anywhere;
+    line-height: 1.25;
+}
+
+.profile-email {
+    font-size: 12px;
+}
+
+.profile-role {
+    font-weight: 800;
+}
+
 .profile span,
 .avatar {
     width: 36px;
@@ -358,6 +378,37 @@ td small,
 
 .profile form {
     grid-column: 1 / -1;
+}
+
+.theme-toggle {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-height: 42px;
+    margin-top: 18px;
+    padding: 8px 10px;
+    border: 1px solid #dfe5ef !important;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: #f8fbff !important;
+    color: #263247;
+}
+
+.theme-toggle span {
+    min-width: 54px;
+    padding: 5px 8px;
+    border-radius: 999px;
+    background: #eaf2ff;
+    color: #1769f6;
+    font-size: 12px;
+    font-weight: 900;
+    text-align: center;
+}
+
+.theme-toggle strong {
+    font-size: 13px;
 }
 
 .content {
@@ -526,6 +577,10 @@ p {
     border-bottom: 0;
 }
 
+.dashboard-requests {
+    margin-top: 22px;
+}
+
 .activity time,
 .activity span,
 .activity small {
@@ -652,6 +707,18 @@ td .avatar {
     padding: 0 12px;
 }
 
+.search-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+}
+
+.search-toolbar small {
+    grid-column: 1 / -1;
+    color: #69758b;
+    font-size: 13px;
+    font-weight: 800;
+}
+
 .ward-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -667,6 +734,12 @@ td .avatar {
 .ward-card,
 .staff-card {
     overflow: hidden;
+}
+
+.ward-card.is-highlighted,
+.ward-detail.is-highlighted {
+    border-color: #1769f6;
+    box-shadow: 0 0 0 3px rgba(23, 105, 246, .18), 0 14px 30px rgba(33, 45, 70, .16);
 }
 
 .ward-detail-list {
@@ -937,6 +1010,14 @@ dialog::backdrop {
     font-size: 15px;
 }
 
+.date-field {
+    display: grid;
+    gap: 6px;
+    color: #263247;
+    font-size: 13px;
+    font-weight: 800;
+}
+
 .modal-form div {
     display: flex;
     justify-content: flex-end;
@@ -950,6 +1031,122 @@ dialog::backdrop {
     border-radius: 6px;
     background: #fff;
     font-weight: 800;
+}
+
+body.hospital-shell.theme-dark {
+    background: #202632;
+    color: #fff;
+}
+
+.theme-dark,
+.theme-dark a,
+.theme-dark p,
+.theme-dark h1,
+.theme-dark h2,
+.theme-dark h3,
+.theme-dark strong,
+.theme-dark span,
+.theme-dark small,
+.theme-dark em,
+.theme-dark b,
+.theme-dark th,
+.theme-dark td,
+.theme-dark label,
+.theme-dark button {
+    color: #fff;
+}
+
+.theme-dark .signin,
+.theme-dark .signin-panel,
+.theme-dark .sidebar,
+.theme-dark dialog,
+.theme-dark .metric,
+.theme-dark .module-card,
+.theme-dark .table-card,
+.theme-dark .list-card,
+.theme-dark .ward-card,
+.theme-dark .ward-detail,
+.theme-dark .staff-card,
+.theme-dark .activity {
+    background: #2a3140;
+    color: #fff;
+}
+
+.theme-dark .sidebar,
+.theme-dark .brand,
+.theme-dark .profile,
+.theme-dark th,
+.theme-dark td,
+.theme-dark .activity article,
+.theme-dark .ward-detail header,
+.theme-dark .list-card article {
+    border-color: #465264;
+}
+
+.theme-dark .signin-panel p,
+.theme-dark .signin-panel small,
+.theme-dark .brand small,
+.theme-dark .profile small,
+.theme-dark td small,
+.theme-dark .module-card small,
+.theme-dark .module-card em,
+.theme-dark .activity span,
+.theme-dark .activity small,
+.theme-dark .activity-head small,
+.theme-dark .page-head p,
+.theme-dark .ward-meta span,
+.theme-dark .ward-foot span,
+.theme-dark .staff-meta span,
+.theme-dark .staff-detail span,
+.theme-dark .mini-list span,
+.theme-dark .mini-list small {
+    color: #fff;
+}
+
+.theme-dark .page-head h1,
+.theme-dark .modal-form h3,
+.theme-dark .date-field,
+.theme-dark th,
+.theme-dark .ward-meta strong,
+.theme-dark .ward-foot strong,
+.theme-dark .staff-meta strong,
+.theme-dark .staff-detail strong {
+    color: #fff;
+}
+
+.theme-dark .signin-panel input,
+.theme-dark .signin-panel select,
+.theme-dark .toolbar input,
+.theme-dark .toolbar select,
+.theme-dark .modal-form input,
+.theme-dark .modal-form textarea,
+.theme-dark .modal-form select {
+    border-color: #566276;
+    background: #242b38;
+    color: #fff;
+}
+
+.theme-dark .auth-tabs button,
+.theme-dark .ghost,
+.theme-dark .modal-form button[data-close],
+.theme-dark .theme-toggle {
+    border-color: #566276 !important;
+    background: #252d3a !important;
+    color: #fff;
+}
+
+.theme-dark .auth-tabs button.active,
+.theme-dark .sidebar a.active,
+.theme-dark .sidebar a:hover,
+.theme-dark .theme-toggle span {
+    background: #365a7f;
+    color: #fff;
+}
+
+.theme-dark .empty-state {
+    border-color: #566276;
+    background: #242b38;
+    color: #fff;
 }
 
 @media (max-width: 980px) {
