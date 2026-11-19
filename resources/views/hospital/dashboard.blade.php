@@ -28,7 +28,6 @@
             display: grid;
             gap: 3px;
         }
-
         .profile-identity strong,
         .profile-identity small {
             overflow-wrap: anywhere;
