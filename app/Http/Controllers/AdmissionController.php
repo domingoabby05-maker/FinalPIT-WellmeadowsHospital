@@ -66,3 +66,4 @@ class AdmissionController extends HospitalController
     }
 }
 
+//admission  
